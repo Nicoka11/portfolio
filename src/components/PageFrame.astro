@@ -1,0 +1,19 @@
+---
+interface Props {
+    phrase: string;
+}
+
+const { phrase } = Astro.props;
+---
+
+<section class="relative min-h-svh overflow-hidden">
+    <div class="absolute inset-0">
+        <slot />
+    </div>
+
+    <h1
+        class="absolute bottom-6 left-6 z-10 max-w-[20ch] font-sans text-frame-phrase leading-[0.95] font-bold tracking-[-0.03em] uppercase sm:bottom-8 sm:left-8 lg:bottom-10 lg:left-10"
+    >
+        {phrase}
+    </h1>
+</section>
