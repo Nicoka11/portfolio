@@ -1,8 +1,8 @@
 import * as THREE from "three";
-import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
-import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
-import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+
+const MAX_PIXEL_RATIO = 1.25;
+const POINTER_ACTIVE_MS = 1200;
+const CLICK_ACTIVE_MS = 4500;
 
 const vertexShader = `
 varying vec2 vUv;
@@ -231,15 +231,6 @@ function setupAsciiWave() {
   const scene = new THREE.Scene();
   const simulationScene = new THREE.Scene();
   const camera = new THREE.Camera();
-  const composer = new EffectComposer(renderer);
-  const renderPass = new RenderPass(scene, camera);
-  const bloomPass = new UnrealBloomPass(
-    new THREE.Vector2(window.innerWidth, window.innerHeight),
-    0.01,
-    0.3,
-    0.32,
-  );
-  const outputPass = new OutputPass();
   const geometry = new THREE.PlaneGeometry(2, 2);
   const pointer = new THREE.Vector2(-10, -10);
   const previousPointer = new THREE.Vector2();
@@ -258,11 +249,10 @@ function setupAsciiWave() {
   let targetA: THREE.WebGLRenderTarget;
   let targetB: THREE.WebGLRenderTarget;
   let impulseRadius = 18;
+  let activeUntil = performance.now() + 200;
+  let loopRunning = false;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-  composer.addPass(renderPass);
-  composer.addPass(bloomPass);
-  composer.addPass(outputPass);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
 
   const targetOptions: THREE.RenderTargetOptions = {
     type: THREE.HalfFloatType,
@@ -310,10 +300,8 @@ function setupAsciiWave() {
   scene.add(new THREE.Mesh(geometry, renderMaterial));
 
   function resize() {
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
     renderer.setSize(window.innerWidth, window.innerHeight, false);
-    composer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-    composer.setSize(window.innerWidth, window.innerHeight);
     renderer.getDrawingBufferSize(drawingBufferSize);
 
     const width = Math.max(1, Math.round(drawingBufferSize.x));
@@ -336,7 +324,10 @@ function setupAsciiWave() {
       simulationHeight,
       targetOptions,
     );
-    const gridTextures = createGridTextures(width, height);
+    const gridTextures = createGridTextures(
+      window.innerWidth,
+      window.innerHeight,
+    );
     asciiTexture = gridTextures.asciiTexture;
     arrowTexture = gridTextures.arrowTexture;
     simulationMaterial.uniforms.uResolution.value.set(
@@ -354,6 +345,16 @@ function setupAsciiWave() {
       window.innerHeight,
     );
     frame = 0;
+    wakeRenderer(300);
+  }
+
+  function wakeRenderer(duration: number) {
+    activeUntil = Math.max(activeUntil, performance.now() + duration);
+
+    if (!loopRunning && !document.hidden) {
+      loopRunning = true;
+      renderer.setAnimationLoop(render);
+    }
   }
 
   function handlePointerMove(event: PointerEvent) {
@@ -385,6 +386,7 @@ function setupAsciiWave() {
     );
     pointerImpulse = 0.3;
     impulseRadius = 5;
+    wakeRenderer(POINTER_ACTIVE_MS);
   }
 
   function handlePointerDown(event: PointerEvent) {
@@ -394,6 +396,7 @@ function setupAsciiWave() {
     );
     pointerImpulse = 6.5;
     impulseRadius = 3;
+    wakeRenderer(CLICK_ACTIVE_MS);
   }
 
   function handleNextPointerDown(event: PointerEvent) {
@@ -406,10 +409,12 @@ function setupAsciiWave() {
 
   function handleNextPointerEnter() {
     arrowHoverTarget = 1;
+    wakeRenderer(400);
   }
 
   function handleNextPointerLeave() {
     arrowHoverTarget = 0;
+    wakeRenderer(400);
   }
 
   function handlePointerLeave() {
@@ -417,6 +422,7 @@ function setupAsciiWave() {
     previousPointerTime = 0;
     pointerVelocity.set(0, 0);
     cursorRadiusTarget = 3;
+    wakeRenderer(400);
   }
 
   function handleMotionPreference() {
@@ -424,6 +430,7 @@ function setupAsciiWave() {
       reducedMotion.matches,
     );
     frame = 0;
+    wakeRenderer(300);
   }
 
   function render() {
@@ -450,15 +457,32 @@ function setupAsciiWave() {
 
     renderMaterial.uniforms.uWave.value = targetA.texture;
     renderer.setRenderTarget(null);
-    composer.render();
+    renderer.render(scene, camera);
+
+    if (performance.now() >= activeUntil) {
+      renderer.setRenderTarget(targetA);
+      renderer.clear();
+      renderer.setRenderTarget(targetB);
+      renderer.clear();
+      renderMaterial.uniforms.uWave.value = targetA.texture;
+      renderer.setRenderTarget(null);
+      renderer.render(scene, camera);
+      renderer.setAnimationLoop(null);
+      loopRunning = false;
+    }
   }
 
   function handleVisibilityChange() {
-    renderer.setAnimationLoop(document.hidden ? null : render);
+    if (document.hidden) {
+      renderer.setAnimationLoop(null);
+      loopRunning = false;
+      return;
+    }
+
+    wakeRenderer(300);
   }
 
   resize();
-  renderer.setAnimationLoop(render);
   window.addEventListener("resize", resize, { signal: abortController.signal });
   window.addEventListener("pointermove", handlePointerMove, {
     signal: abortController.signal,
@@ -505,9 +529,6 @@ function setupAsciiWave() {
     geometry.dispose();
     simulationMaterial.dispose();
     renderMaterial.dispose();
-    composer.dispose();
-    bloomPass.dispose();
-    outputPass.dispose();
     renderer.dispose();
   };
 }
