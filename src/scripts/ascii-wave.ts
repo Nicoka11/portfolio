@@ -72,16 +72,18 @@ uniform sampler2D uArrow;
 uniform vec3 uBackground;
 uniform vec2 uPointer;
 uniform vec2 uViewport;
+uniform vec2 uGrid;
 uniform float uCursorRadius;
 uniform float uArrowHover;
 uniform float uReducedMotion;
 varying vec2 vUv;
 
 void main() {
-    vec4 waveData = texture2D(uWave, vUv);
+    vec2 cellUv = (floor(vUv * uGrid) + 0.5) / uGrid;
+    vec4 waveData = texture2D(uWave, cellUv);
     float ripple = smoothstep(0.001, 0.36, abs(waveData.x));
     ripple = pow(ripple, 0.66);
-    float halo = 1.0 - smoothstep(0.0, 0.20, distance(vUv, uPointer));
+    float halo = 1.0 - smoothstep(0.0, 0.20, distance(cellUv, uPointer));
     float reveal = mix(ripple, halo, uReducedMotion);
     float glyph = texture2D(uAscii, vUv).a;
     float arrow = texture2D(uArrow, vUv).a;
@@ -109,6 +111,8 @@ let teardown: (() => void) | undefined;
 interface GridTextures {
   arrowTexture: THREE.CanvasTexture;
   asciiTexture: THREE.CanvasTexture;
+  columns: number;
+  rows: number;
 }
 
 function createGridTexture(canvas: HTMLCanvasElement) {
@@ -198,6 +202,8 @@ function createGridTextures(width: number, height: number): GridTextures {
   return {
     asciiTexture: createGridTexture(asciiCanvas),
     arrowTexture: createGridTexture(arrowCanvas),
+    columns,
+    rows,
   };
 }
 
@@ -289,6 +295,7 @@ function setupAsciiWave() {
       uBackground: { value: new THREE.Color(background) },
       uPointer: { value: pointer },
       uViewport: { value: new THREE.Vector2(1, 1) },
+      uGrid: { value: new THREE.Vector2(1, 1) },
       uCursorRadius: { value: cursorRadius },
       uArrowHover: { value: arrowHover },
       uReducedMotion: { value: Number(reducedMotion.matches) },
@@ -338,6 +345,10 @@ function setupAsciiWave() {
     );
     renderMaterial.uniforms.uAscii.value = asciiTexture;
     renderMaterial.uniforms.uArrow.value = arrowTexture;
+    renderMaterial.uniforms.uGrid.value.set(
+      gridTextures.columns,
+      gridTextures.rows,
+    );
     renderMaterial.uniforms.uViewport.value.set(
       window.innerWidth,
       window.innerHeight,
