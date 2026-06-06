@@ -1,0 +1,4 @@
+interface:
+  display_name: "Astro Page Lifecycle"
+  short_description: "Safe Astro transitions and client cleanup"
+  default_prompt: "Use $astro-page-lifecycle to implement lifecycle-safe Astro page transitions."
