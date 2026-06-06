@@ -27,11 +27,21 @@ Preserve this copy unless the user explicitly asks to edit it:
 
 - Use Astro and follow the existing project structure and conventions.
 - Consult the installed `astro-docs` MCP for current Astro APIs and recommended patterns.
+- Use Tailwind CSS 4 through the existing `@tailwindcss/vite` setup and shared `src/styles/global.css` import.
 - Use the project’s `astro-page-lifecycle` skill for page transitions, client-script initialization, and cleanup.
 - Use the available GSAP skills for animation, timelines, ScrollTrigger, and performance guidance.
 - Use Three.js when a frame genuinely needs 3D, shaders, particles, or WebGL effects; do not add it for simple CSS/GSAP motion.
 - Use the installed `threejs-*` skills for fundamentals, geometry, materials, shaders, post-processing, and interaction. Verify version-sensitive APIs against current Three.js docs and pair scene code with `astro-page-lifecycle` cleanup.
 - Keep JavaScript client-side only where interaction requires it. Prefer Astro components and progressive enhancement.
+
+## Styling
+
+- Prefer Tailwind utilities for layout, spacing, typography, responsive states, and common visual styling.
+- Define shared design tokens with Tailwind 4 `@theme` variables in `src/styles/global.css`.
+- Use scoped Astro styles for bespoke transitions, pseudo-elements, complex keyframes, and effects that utilities would make harder to read.
+- Keep class names statically detectable. Map variants to complete class strings instead of constructing utilities dynamically.
+- Avoid repeated arbitrary values when they represent a reusable design token.
+- Preserve readable component markup; extract components or scoped CSS when utility strings obscure the visual intent.
 
 ## Working Principles
 
