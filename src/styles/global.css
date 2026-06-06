@@ -25,6 +25,11 @@
         font-family: var(--font-sans);
     }
 
+    .has-webgl-cursor,
+    .has-webgl-cursor * {
+        cursor: none;
+    }
+
     #webgl-canvas {
         position: fixed;
         inset: 0;

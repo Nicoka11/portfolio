@@ -4,5 +4,19 @@ import Layout from "../layouts/Layout.astro";
 ---
 
 <Layout>
-    <PageFrame phrase="I always ask myself" />
+    <PageFrame phrase="I always ask myself">
+        <div data-ascii-wave></div>
+        <button
+            type="button"
+            data-ascii-next
+            aria-label="Next"
+            class="fixed right-6 bottom-6 z-20 h-40 w-60 border-0 bg-transparent text-transparent outline-none focus-visible:ring-2 focus-visible:ring-red-500 sm:right-8 sm:bottom-8"
+        >
+            Next
+        </button>
+    </PageFrame>
 </Layout>
+
+<script>
+    import "../scripts/ascii-wave";
+</script>
