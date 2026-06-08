@@ -1,8 +1,11 @@
 import * as THREE from "three";
+import { navigate } from "astro:transitions/client";
+import { gsap } from "gsap";
 
 const MAX_PIXEL_RATIO = 1.25;
 const POINTER_ACTIVE_MS = 1200;
 const CLICK_ACTIVE_MS = 4500;
+const SCANNER_DURATION_MS = 300;
 
 const vertexShader = `
 varying vec2 vUv;
@@ -76,6 +79,7 @@ uniform vec2 uGrid;
 uniform float uCursorRadius;
 uniform float uArrowHover;
 uniform float uReducedMotion;
+uniform float uScanner;
 varying vec2 vUv;
 
 void main() {
@@ -93,13 +97,32 @@ void main() {
         uCursorRadius + 1.5,
         length(pointerOffset)
     );
-    vec3 color = mix(uBackground, vec3(1.15), max(glyph, arrow) * reveal);
+    float scannerActive = step(0.0, uScanner);
+    vec2 scannerOffset = (vUv - vec2(0.5)) * uViewport;
+    float scannerDistance = length(scannerOffset);
+    float scannerOuterRadius = length(uViewport) * 0.5;
+    float scannerRadius = scannerOuterRadius * (1.0 - clamp(uScanner, 0.0, 1.0));
+    float scannerBand = 1.0 - smoothstep(
+        0.0,
+        10.0,
+        abs(scannerDistance - scannerRadius)
+    );
+    scannerBand *= scannerActive;
+    float scannerCleared = step(scannerRadius, scannerDistance) * scannerActive;
+    float sceneVisibility = 1.0 - scannerCleared;
+    float scannerGlyph = max(glyph, arrow) * scannerBand;
+    vec3 color = mix(
+        uBackground,
+        vec3(1.15),
+        max(glyph, arrow) * reveal * sceneVisibility
+    );
     vec3 cursorColor = mix(
         vec3(2.8, 0.015, 0.01),
         vec3(0.02, 2.8, 0.12),
         uArrowHover
     );
     color = mix(color, cursorColor, cursorPoint);
+    color = mix(color, vec3(1.3), scannerGlyph);
 
     gl_FragColor = vec4(color, 1.0);
 }
@@ -210,12 +233,12 @@ function createGridTextures(width: number, height: number): GridTextures {
 function setupAsciiWave() {
   const root = document.querySelector<HTMLElement>("[data-ascii-wave]");
   const canvas = document.querySelector<HTMLCanvasElement>("#webgl-canvas");
-  const nextButton = document.querySelector<HTMLButtonElement>(
-    "[data-ascii-next]",
-  );
+  const nextButton =
+    document.querySelector<HTMLAnchorElement>("[data-ascii-next]");
 
   if (!root || !canvas || !nextButton) return;
 
+  const nextLink = nextButton;
   const abortController = new AbortController();
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   document.documentElement.classList.add("has-webgl-cursor");
@@ -251,6 +274,9 @@ function setupAsciiWave() {
   let impulseRadius = 18;
   let activeUntil = performance.now() + 200;
   let loopRunning = false;
+  let scannerRunning = false;
+  let scannerTween: ReturnType<typeof gsap.to> | undefined;
+  let waveDisposed = false;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
 
@@ -289,6 +315,7 @@ function setupAsciiWave() {
       uCursorRadius: { value: cursorRadius },
       uArrowHover: { value: arrowHover },
       uReducedMotion: { value: Number(reducedMotion.matches) },
+      uScanner: { value: -1 },
     },
     vertexShader,
     fragmentShader: renderFragmentShader,
@@ -296,8 +323,10 @@ function setupAsciiWave() {
     depthWrite: false,
   });
 
-  simulationScene.add(new THREE.Mesh(geometry, simulationMaterial));
-  scene.add(new THREE.Mesh(geometry, renderMaterial));
+  const simulationMesh = new THREE.Mesh(geometry, simulationMaterial);
+  const waveMesh = new THREE.Mesh(geometry, renderMaterial);
+  simulationScene.add(simulationMesh);
+  scene.add(waveMesh);
 
   function resize() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
@@ -403,8 +432,49 @@ function setupAsciiWave() {
     event.stopPropagation();
   }
 
-  function handleNextClick() {
-    console.log("next");
+  function handleNextClick(event: MouseEvent) {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (scannerRunning) return;
+
+    if (reducedMotion.matches) {
+      clearWaveScene();
+      navigate(nextLink.href, { sourceElement: nextLink });
+      return;
+    }
+
+    scannerRunning = true;
+    pointer.set(-10, -10);
+    arrowHoverTarget = 0;
+    wakeRenderer(SCANNER_DURATION_MS + 100);
+    const scanner = { progress: 0 };
+    scannerTween = gsap.to(scanner, {
+      progress: 1,
+      duration: SCANNER_DURATION_MS / 1000,
+      ease: "power2.in",
+      onUpdate: () => {
+        renderMaterial.uniforms.uScanner.value = scanner.progress;
+        wakeRenderer(100);
+      },
+      onComplete: () => {
+        scannerRunning = false;
+        clearWaveScene();
+        navigate(nextLink.href, {
+          sourceElement: nextLink,
+        });
+      },
+    });
   }
 
   function handleNextPointerEnter() {
@@ -459,7 +529,7 @@ function setupAsciiWave() {
     renderer.setRenderTarget(null);
     renderer.render(scene, camera);
 
-    if (performance.now() >= activeUntil) {
+    if (!scannerRunning && performance.now() >= activeUntil) {
       renderer.setRenderTarget(targetA);
       renderer.clear();
       renderer.setRenderTarget(targetB);
@@ -470,6 +540,38 @@ function setupAsciiWave() {
       renderer.setAnimationLoop(null);
       loopRunning = false;
     }
+  }
+
+  function clearWaveScene() {
+    if (waveDisposed) return;
+
+    waveDisposed = true;
+    abortController.abort();
+    document.documentElement.classList.remove("has-webgl-cursor");
+    scene.remove(waveMesh);
+    simulationScene.remove(simulationMesh);
+    targetA.dispose();
+    targetB.dispose();
+    asciiTexture.dispose();
+    arrowTexture.dispose();
+    geometry.dispose();
+    simulationMaterial.dispose();
+    renderMaterial.dispose();
+    renderer.setRenderTarget(null);
+    renderer.clear();
+  }
+
+  function dispose() {
+    abortController.abort();
+    scannerTween?.kill();
+    document.documentElement.classList.remove("has-webgl-cursor");
+    renderer.setAnimationLoop(null);
+
+    if (!waveDisposed) {
+      clearWaveScene();
+    }
+
+    renderer.dispose();
   }
 
   function handleVisibilityChange() {
@@ -492,16 +594,16 @@ function setupAsciiWave() {
     signal: abortController.signal,
     passive: true,
   });
-  nextButton.addEventListener("pointerdown", handleNextPointerDown, {
+  nextLink.addEventListener("pointerdown", handleNextPointerDown, {
     signal: abortController.signal,
   });
-  nextButton.addEventListener("click", handleNextClick, {
+  nextLink.addEventListener("click", handleNextClick, {
     signal: abortController.signal,
   });
-  nextButton.addEventListener("pointerenter", handleNextPointerEnter, {
+  nextLink.addEventListener("pointerenter", handleNextPointerEnter, {
     signal: abortController.signal,
   });
-  nextButton.addEventListener("pointerleave", handleNextPointerLeave, {
+  nextLink.addEventListener("pointerleave", handleNextPointerLeave, {
     signal: abortController.signal,
   });
   document.documentElement.addEventListener(
@@ -518,19 +620,7 @@ function setupAsciiWave() {
     signal: abortController.signal,
   });
 
-  return () => {
-    abortController.abort();
-    document.documentElement.classList.remove("has-webgl-cursor");
-    renderer.setAnimationLoop(null);
-    targetA.dispose();
-    targetB.dispose();
-    asciiTexture.dispose();
-    arrowTexture.dispose();
-    geometry.dispose();
-    simulationMaterial.dispose();
-    renderMaterial.dispose();
-    renderer.dispose();
-  };
+  return dispose;
 }
 
 function initialize() {

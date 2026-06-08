@@ -1,42 +1,68 @@
 @import "tailwindcss";
 
 :root {
-    --bg: #0c0c0c;
+  --bg: #0c0c0c;
 }
 
 @theme {
-    --color-bg: var(--bg);
-    --font-sans: var(--font-switzer);
-    --text-frame-phrase: clamp(1.5rem, 3vw, 3rem);
+  --color-bg: var(--bg);
+  --font-sans: var(--font-switzer);
+  --text-frame-phrase: clamp(1.5rem, 3vw, 3rem);
 }
 
 @layer base {
-    html {
-        min-width: 320px;
-        min-height: 100%;
-        background: var(--bg);
-    }
+  html {
+    min-width: 320px;
+    min-height: 100%;
+    background: var(--bg);
+  }
 
-    body {
-        min-height: 100%;
-        margin: 0;
-        background: var(--bg);
-        color: #fff;
-        font-family: var(--font-sans);
-    }
+  body {
+    min-height: 100%;
+    margin: 0;
+    background: var(--bg);
+    color: #fff;
+    font-family: var(--font-sans);
+  }
 
-    .has-webgl-cursor,
-    .has-webgl-cursor * {
-        cursor: none;
-    }
+  .has-webgl-cursor,
+  .has-webgl-cursor * {
+    cursor: none;
+  }
 
-    #webgl-canvas {
-        position: fixed;
-        inset: 0;
-        z-index: 0;
-        display: block;
-        width: 100vw;
-        height: 100svh;
-        pointer-events: none;
-    }
+  #webgl-canvas {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    display: block;
+    width: 100vw;
+    height: 100svh;
+    pointer-events: none;
+  }
+
+  .has-js [data-frame-phrase]:not([data-frame-phrase-ready]) {
+    visibility: hidden;
+  }
+
+  [data-frame-phrase] {
+    font-kerning: none;
+    text-rendering: optimizeSpeed;
+    z-index: 100;
+  }
+
+  [data-frame-phrase] .frame-phrase-char {
+    display: inline-block;
+    will-change: transform;
+  }
+
+  [data-frame-phrase] .frame-phrase-char-mask {
+    display: inline-block;
+    vertical-align: bottom;
+  }
+
+  [data-frame-phrase] .frame-phrase-word {
+    display: inline-block;
+    overflow: hidden !important;
+    vertical-align: bottom;
+  }
 }

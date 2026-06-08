@@ -1,5 +1,6 @@
 ---
 import { Font } from "astro:assets";
+import { ClientRouter } from "astro:transitions";
 import "../styles/global.css";
 
 interface Props {
@@ -14,6 +15,9 @@ const { title = "Portfolio 2k26" } = Astro.props;
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width" />
+        <script is:inline>
+            document.documentElement.classList.add("has-js");
+        </script>
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <link rel="icon" href="/favicon.ico" />
         <meta name="generator" content={Astro.generator} />
@@ -21,13 +25,22 @@ const { title = "Portfolio 2k26" } = Astro.props;
             cssVariable="--font-switzer"
             preload={[{ weight: "400", style: "normal" }]}
         />
+        <ClientRouter />
         <title>{title}</title>
     </head>
     <body>
-        <canvas id="webgl-canvas" aria-hidden="true"></canvas>
+        <canvas
+            id="webgl-canvas"
+            aria-hidden="true"
+            transition:persist="webgl-canvas"
+        ></canvas>
 
         <main class="relative z-10">
             <slot />
         </main>
+
+        <script>
+            import "../scripts/frame-phrase";
+        </script>
     </body>
 </html>
